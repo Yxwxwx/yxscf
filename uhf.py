@@ -7,7 +7,7 @@ from pyscf.tools import dump_mat
 print_matrix = lambda x, title="", stdout=sys.stdout: (print(title, file=stdout), dump_mat.dump_rec(stdout, x))
 
 # Set up molecular geometry and basis
-mol = gto.M(atom='O 0 0 0.5; O 0 0 -0.5', basis='sto3g', spin=2, charge=0)
+mol = gto.M(atom='O 0 0 0.5; O 0 0 -0.5', basis='ccpvdz', spin=2, charge=0)
 
 # ==> Set default program options <==
 # Maximum SCF iterations
