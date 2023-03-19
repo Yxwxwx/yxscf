@@ -2,12 +2,16 @@ import numpy as np
 from scipy.linalg import sqrtm, eig
 from pyscf import scf, gto
 
+import os, sys
+from pyscf.tools import dump_mat
+print_matrix = lambda x, title="", stdout=sys.stdout: (print(title, file=stdout), dump_mat.dump_rec(stdout, x))
+
 # Set up molecular geometry and basis
-mol = gto.M(atom='O 0 0 0.5; O 0 0 -0.5', basis='cc-pvdz', spin=2, charge=0)
+mol = gto.M(atom='O 0 0 0.5; O 0 0 -0.5', basis='sto3g', spin=2, charge=0)
 
 # ==> Set default program options <==
 # Maximum SCF iterations
-max_iter = 40
+max_iter = 200
 # Energy convergence criterion
 E_conv = 1.0e-10
 D_conv = 1.0e-8
@@ -126,10 +130,11 @@ def diis_xtrap(F_list, DIIS_RESID):
 # ==> Build alpha & beta CORE guess <==
 # Perform a UHF calculation to obtain the alpha and beta density matrices
 scf_eng = scf.UHF(mol)
-scf_eng.scf()
+e_uhf_ref = scf_eng.scf()
 # Extract the alpha and beta density matrices
 Da = scf_eng.get_init_guess()[0]
 Db = scf_eng.get_init_guess()[1]
+Da_ref, Db_ref = scf_eng.make_rdm1()
 
 # SCF & Previous Energy
 SCF_E = 0.0
@@ -140,7 +145,13 @@ for scf_iter in range(1, max_iter + 1):
 
     # GET Fock martix
     Fa = T + V + get_j(Da) + get_j(Db) - get_k(Da)
+    # TODO: check if this is correct
     Fb = T + V + get_j(Da) + get_j(Db) - get_k(Da)
+
+    # Check if the Fock matrix is identical to the reference
+    Fa_ref, Fb_ref = scf_eng.get_fock(dm=(Da, Db))
+    print("Fa difference = %6.4e" % np.linalg.norm(Fa - Fa_ref))
+    print("Fb difference = %6.4e" % np.linalg.norm(Fb - Fb_ref))
 
     # Compute DIIS residual for Fa & Fb
     '''error vector = FDS - SDF '''
@@ -166,13 +177,21 @@ for scf_iter in range(1, max_iter + 1):
     if (abs(dE) < E_conv) and (dRMS < D_conv):
         print("SCF convergence! Congrats")
         break
+
     E_old = SCF_E
     # DIIS Extrapolation
-    if scf_iter >= 2:
-        if scf_iter == 2:
+    if scf_iter >= 20:
+        if scf_iter == 20:
             print("DIIS start!")
         Fa = diis_xtrap(F_list_a, R_list_a)
         Fb = diis_xtrap(F_list_b, R_list_b)
+
     Da = make_D(Fa, nalpha)
     Db = make_D(Fb, nbeta)
-    
+
+print("\n")
+print("UHF Energy = %12.8f" % SCF_E)
+print("Ref Energy = %12.8f" % e_uhf_ref)
+print("Difference in total energy         = %6.4e" % (SCF_E - e_uhf_ref))
+print("Difference in alpha density matrix = %6.4e" % np.mean(np.abs(Da - Da_ref)))
+print("Difference in beta  density matrix = %6.4e" % np.mean(np.abs(Db - Db_ref)))
