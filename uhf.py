@@ -3,7 +3,7 @@ from scipy.linalg import sqrtm, eig
 from pyscf import scf, gto
 
 # Set up molecular geometry and basis
-mol = gto.M(atom='O 0 0 0.5; O 0 0 -0.5', basis='cc-pvdz', spin=2, charge=0)
+mol = gto.M(atom='O 0 0 0.5; O 0 0 -0.5', basis='ccpvdz', spin=2, charge=0)
 
 # ==> Set default program options <==
 # Maximum SCF iterations
@@ -140,7 +140,7 @@ for scf_iter in range(1, max_iter + 1):
 
     # GET Fock martix
     Fa = T + V + get_j(Da) + get_j(Db) - get_k(Da)
-    Fb = T + V + get_j(Da) + get_j(Db) - get_k(Da)
+    Fb = T + V + get_j(Da) + get_j(Db) - get_k(Db)
 
     # Compute DIIS residual for Fa & Fb
     '''error vector = FDS - SDF '''
