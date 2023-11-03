@@ -124,6 +124,44 @@ def ediis_minimize(energies, fock_matrices, density_matrices):
     # Return the minimized cost and the optimized coefficients
     return result.fun, (result.x ** 2) / (result.x ** 2).sum()
 
+def adiis_minimize(fock_matrices, density_matrices):
+    # Get the number of elements (nx)
+    nx = len(fock_matrices)
+
+    # Check that the input arrays have the same length (nx)
+    assert nx == len(density_matrices)
+
+    # Calculate the difference matrix df
+    df = np.einsum('inpq, jnqp -> ij', density_matrices, fock_matrices).real
+    d_fn = df[:, nx - 1]
+    dn_f = df[nx - 1]
+    dn_fn = df[nx - 1, nx - 1]
+    dd_fn = d_fn - dn_fn
+    df = df - d_fn[:,None] - dn_f + dn_fn
+
+    # Define the cost function
+    def cost_function(x):
+        # Normalize coefficients
+        c = x ** 2 / (x ** 2).sum()
+        return np.einsum('i,i', c, dd_fn) * 2 + np.einsum('i,ij,j', c, df, c)
+
+    # Define the gradient of the cost function
+    def gradient(x):
+        x2sum = (x**2).sum()
+        c = x**2 / x2sum
+        fc = 2*dd_fn
+        fc+= np.einsum('j,kj->k', c, df)
+        fc+= np.einsum('i,ik->k', c, df)
+        cx = np.diag(x*x2sum) - np.einsum('k,n->kn', x**2, x)
+        cx *= 2/x2sum**2
+        return np.einsum('k,kn->n', fc, cx)
+
+    # Minimize the cost function using BFGS optimization
+    result = scipy.optimize.minimize(cost_function, np.ones(nx), method='BFGS', jac=gradient, tol=1e-9)
+
+    # Return the minimized cost and the optimized coefficients
+    return result.fun, (result.x ** 2) / (result.x ** 2).sum()
+
 def diis_xtrap(F_list, DIIS_RESID):
     # Build B matrix
     B_dim = len(F_list) + 1
@@ -160,7 +198,14 @@ E_old = 0.0
 
 n_diis = 5
 diis_info = []
+
+ediis = False
 nediis = 0.1
+
+adiis = True
+nadiis = 0.1
+
+cdiis = True
 ncdiis = 0.0001
 
 # ==> RHF-SCF Iterations <==
@@ -194,7 +239,7 @@ for scf_iter in range(1, max_iter + 1):
     if (len(diis_info) > n_diis):
             del(diis_info[0])
 
-    if (dRMS < nediis) and (dRMS > ncdiis):
+    if (dRMS < nediis) and (dRMS > ncdiis) and (ediis == True):
 
         print('SCF Iteration %3d: Energy = %4.16f dE = % 1.5E dRMS = %1.5E EDIIS' % (scf_iter, SCF_E, dE, dRMS))
 
@@ -206,7 +251,19 @@ for scf_iter in range(1, max_iter + 1):
         F = np.einsum('i,i...pq->...pq', c, fock_matrices).reshape((nao,nao))
         D = make_D(F, ndocc)
 
-    elif (dRMS <= ncdiis):
+    elif (dRMS < nadiis) and (dRMS > ncdiis) and (adiis == True):
+        
+        print('SCF Iteration %3d: Energy = %4.16f dE = % 1.5E dRMS = %1.5E ADIIS' % (scf_iter, SCF_E, dE, dRMS))
+
+        nx = len(diis_info)
+        fock_matrices = np.array([item["fock_matrix"] for item in diis_info]).reshape((nx, -1, nao, nao))
+        density_matrices = np.array([item["density_matrix"] for item in diis_info]).reshape((nx, -1, nao, nao))
+        etot, c = adiis_minimize(fock_matrices, density_matrices, )
+        F = np.einsum('i,i...pq->...pq', c, fock_matrices).reshape((nao,nao))
+        D = make_D(F, ndocc)
+
+    
+    elif ((cdiis == True) and (dRMS <= ncdiis)) or ((ediis == False) and (adiis == False)):
 
         print('SCF Iteration %3d: Energy = %4.16f dE = % 1.5E dRMS = %1.5E CDIIS' % (scf_iter, SCF_E, dE, dRMS))
         
