@@ -2,7 +2,7 @@ import numpy as np
 from pyscf import scf, gto
 
 # Set up molecular geometry and basis
-mol = gto.M(atom='Fe 0 0 0', basis='ccpvdz', spin=4, charge=0)
+mol = gto.M(atom="Fe 0 0 0", basis="ccpvdz", spin=4, charge=0)
 
 # ==> Set default program options <==
 # Maximum SCF iterations
@@ -67,21 +67,24 @@ R_list_b = []
 # Calculate the coulomb matrices from density matrix
 def get_j(D):
     J = np.zeros((nao, nao))  # Initialize the Coulomb matrix
-    J = np.einsum('pqrs,rs->pq', I, D, optimize=True)
+    J = np.einsum("pqrs,rs->pq", I, D, optimize=True)
     return J
 
 
 # Calculate the exchange  matrices from density matrix
 def get_k(D):
     # K = np.zeros((nao, nao))  # Initialize the K matrix
-    K = np.einsum('prqs,rs->pq', I, D, optimize=True)
+    K = np.einsum("prqs,rs->pq", I, D, optimize=True)
     return K
+
 
 # Calculate the density matrix
 def make_D(fock, norb):
-    eigs, coeffs = scf.hf.eig(fock, S)  # this is a PySCF function to carry out the diagonalization
+    eigs, coeffs = scf.hf.eig(
+        fock, S
+    )  # this is a PySCF function to carry out the diagonalization
     c_occ = coeffs[:, :norb]
-    D =  np.einsum('pi,qi->pq', c_occ, c_occ, optimize=True)
+    D = np.einsum("pi,qi->pq", c_occ, c_occ, optimize=True)
     return D
 
 
@@ -95,7 +98,7 @@ def diis_xtrap(F_list, DIIS_RESID):
     B[-1, -1] = 0
     for i in range(len(F_list)):
         for j in range(len(F_list)):
-            B[i, j] = np.einsum('ij,ij->', DIIS_RESID[i], DIIS_RESID[j], optimize=True)
+            B[i, j] = np.einsum("ij,ij->", DIIS_RESID[i], DIIS_RESID[j], optimize=True)
 
     # Build RHS of Pulay equation
     rhs = np.zeros((B_dim))
@@ -126,16 +129,15 @@ E_old = 0.0
 
 # ==> UHF-SCF Iterations <==
 for scf_iter in range(1, max_iter + 1):
-
     # GET Fock martix
     Fa = T + V + get_j(Da) + get_j(Db) - get_k(Da)
     Fb = T + V + get_j(Da) + get_j(Db) - get_k(Db)
 
     # Compute DIIS residual for Fa & Fb
-    '''error vector = FDS - SDF '''
+    """error vector = FDS - SDF """
     diis_r_a = Fa.dot(Da).dot(S) - S.dot(Da).dot(Fa)
     diis_r_b = Fb.dot(Db).dot(S) - S.dot(Db).dot(Fb)
-    
+
     # Append trial & residual vectors to lists
     F_list_a.append(Fa)
     F_list_b.append(Fb)
@@ -143,14 +145,17 @@ for scf_iter in range(1, max_iter + 1):
     R_list_b.append(diis_r_b)
 
     # Compute UHF Energy
-    SCF_E = np.einsum('pq,pq->', (Da + Db), H, optimize=True)
-    SCF_E += np.einsum('pq,pq->', Da, Fa, optimize=True)
-    SCF_E += np.einsum('pq,pq->', Db, Fb, optimize=True)
+    SCF_E = np.einsum("pq,pq->", (Da + Db), H, optimize=True)
+    SCF_E += np.einsum("pq,pq->", Da, Fa, optimize=True)
+    SCF_E += np.einsum("pq,pq->", Db, Fb, optimize=True)
     SCF_E *= 0.5
     SCF_E += E_nuc
     dE = SCF_E - E_old
-    dRMS = 0.5 * (np.mean(diis_r_a ** 2) ** 0.5 + np.mean(diis_r_b ** 2) ** 0.5)
-    print('SCF Iteration %3d: Energy = %4.16f dE = % 1.5E dRMS = %1.5E' % (scf_iter, SCF_E, dE, dRMS))
+    dRMS = 0.5 * (np.mean(diis_r_a**2) ** 0.5 + np.mean(diis_r_b**2) ** 0.5)
+    print(
+        "SCF Iteration %3d: Energy = %4.16f dE = % 1.5E dRMS = %1.5E"
+        % (scf_iter, SCF_E, dE, dRMS)
+    )
 
     if (abs(dE) < E_conv) and (dRMS < D_conv):
         print("SCF convergence! Congrats")
@@ -162,6 +167,6 @@ for scf_iter in range(1, max_iter + 1):
             print("DIIS start!")
         Fa = diis_xtrap(F_list_a, R_list_a)
         Fb = diis_xtrap(F_list_b, R_list_b)
+    # TODO
     Da = make_D(Fa, nalpha)
     Db = make_D(Fb, nbeta)
-    
