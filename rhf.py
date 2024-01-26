@@ -3,7 +3,7 @@ from scipy.linalg import sqrtm, eig
 from pyscf import scf, gto
 
 # Set up molecular geometry and basis
-mol = gto.M(atom='O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587', basis='ccpvtz')
+mol = gto.M(atom="O 0 0 0; H 0 -0.757 0.587; H 0 0.757 0.587", basis="ccpvtz")
 # ==> Set default program options <==
 # Maximum SCF iterations
 max_iter = 100
@@ -60,25 +60,30 @@ I = np.reshape(I, [nao, nao, nao, nao])
 F_list = []
 R_list = []
 
+
 # Calculate the coulomb matrices from density matrix
 def get_j(D):
     J = np.zeros((nao, nao))  # Initialize the Coulomb matrix
-    J = np.einsum('pqrs,rs->pq', I, D, optimize=True)
+    J = np.einsum("pqrs,rs->pq", I, D, optimize=True)
     return J
 
 
 # Calculate the exchange  matrices from density matrix
 def get_k(D):
     # K = np.zeros((nao, nao))  # Initialize the K matrix
-    K = np.einsum('prqs,rs->pq', I, D, optimize=True)
+    K = np.einsum("prqs,rs->pq", I, D, optimize=True)
     return K
+
 
 # Calculate the density matrix
 def make_D(fock, norb):
-    eigs, coeffs = scf.hf.eig(fock, S)  # this is a PySCF function to carry out the diagonalization
+    eigs, coeffs = scf.hf.eig(
+        fock, S
+    )  # this is a PySCF function to carry out the diagonalization
     c_occ = coeffs[:, :norb]
-    D =  np.einsum('pi,qi->pq', c_occ, c_occ, optimize=True)
+    D = np.einsum("pi,qi->pq", c_occ, c_occ, optimize=True)
     return D
+
 
 # ==> Build DIIS Extrapolation Function <==
 def diis_xtrap(F_list, DIIS_RESID):
@@ -90,7 +95,7 @@ def diis_xtrap(F_list, DIIS_RESID):
     B[-1, -1] = 0
     for i in range(len(F_list)):
         for j in range(len(F_list)):
-            B[i, j] = np.einsum('ij,ij->', DIIS_RESID[i], DIIS_RESID[j], optimize=True)
+            B[i, j] = np.einsum("ij,ij->", DIIS_RESID[i], DIIS_RESID[j], optimize=True)
 
     # Build RHS of Pulay equation
     rhs = np.zeros((B_dim))
@@ -106,12 +111,14 @@ def diis_xtrap(F_list, DIIS_RESID):
 
     return F_DIIS
 
+
 # start DM as just as pyscf guss
 scf_eng = scf.RHF(mol)
 scf_eng.scf()
-D = H
-#D = np.eye(nao)
-#D = scf_eng.get_init_guess()
+D = make_D(H, ndocc)
+
+# D = np.eye(nao)
+# D = scf_eng.get_init_guess()
 
 # SCF & Previous Energy
 SCF_E = 0.0
@@ -119,19 +126,21 @@ E_old = 0.0
 
 # ==> RHF-SCF Iterations <==
 for scf_iter in range(1, max_iter + 1):
-
     # GET Fock martix
     F = H + 2 * get_j(D) - get_k(D)
 
-    #build error vector
-    '''error vector = FDS - SDF '''
+    # build error vector
+    """error vector = FDS - SDF """
     diis_r = F.dot(D).dot(S) - S.dot(D).dot(F)
     F_list.append(F)
     R_list.append(diis_r)
-    SCF_E = np.einsum('pq,pq->', (H + F), D, optimize=True) + E_nuc
+    SCF_E = np.einsum("pq,pq->", (H + F), D, optimize=True) + E_nuc
     dE = SCF_E - E_old
-    dRMS = 0.5 * np.mean(diis_r ** 2) ** 0.5
-    print('SCF Iteration %3d: Energy = %4.16f dE = % 1.5E dRMS = %1.5E' % (scf_iter, SCF_E, dE, dRMS))
+    dRMS = 0.5 * np.mean(diis_r**2) ** 0.5
+    print(
+        "SCF Iteration %3d: Energy = %4.16f dE = % 1.5E dRMS = %1.5E"
+        % (scf_iter, SCF_E, dE, dRMS)
+    )
 
     if (abs(dE) < E_conv) and (dRMS < D_conv):
         print("SCF convergence! Congrats")
